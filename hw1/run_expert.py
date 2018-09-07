@@ -15,6 +15,7 @@ import numpy as np
 import tf_util
 import gym
 import load_policy
+import os
 
 def main():
     import argparse
@@ -67,6 +68,8 @@ def main():
 
         expert_data = {'observations': np.array(observations),
                        'actions': np.array(actions)}
+        with open(os.path.join("./expert_data", env.spec.id+".pkl"),'wb') as f:
+            pickle.dump(expert_data,f)
 
 if __name__ == '__main__':
     main()
