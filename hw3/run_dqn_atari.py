@@ -1,4 +1,6 @@
 import argparse
+import datetime
+import os
 import gym
 from gym import wrappers
 import os.path as osp
@@ -30,7 +32,8 @@ def atari_model(img_in, num_actions, scope, reuse=False):
 
 def atari_learn(env,
                 session,
-                num_timesteps):
+                num_timesteps,
+                log_dir):
     # This is just a rough estimate
     num_iterations = float(num_timesteps) / 4.0
 
@@ -74,7 +77,8 @@ def atari_learn(env,
         learning_freq=4,
         frame_history_len=4,
         target_update_freq=10000,
-        grad_norm_clipping=10
+        grad_norm_clipping=10,
+        log_dir=log_dir
     )
     env.close()
 
@@ -97,7 +101,9 @@ def get_session():
     tf.reset_default_graph()
     tf_config = tf.ConfigProto(
         inter_op_parallelism_threads=1,
-        intra_op_parallelism_threads=1)
+        intra_op_parallelism_threads=1
+    )
+    tf_config.gpu_options.allow_growth = True
     session = tf.Session(config=tf_config)
     print("AVAILABLE GPUS: ", get_available_gpus())
     return session
@@ -106,6 +112,7 @@ def get_env(task, seed):
     env_id = task.env_id
 
     env = gym.make(env_id)
+    # env = gym.make(task)
 
     set_global_seeds(seed)
     env.seed(seed)
@@ -122,12 +129,16 @@ def main():
 
     # Change the index to select a different game.
     task = benchmark.tasks[3]
+    # task = 'PongNoFrameskip-v0'
 
     # Run training
     seed = 0 # Use a seed of zero (you may want to randomize the seed!)
     env = get_env(task, seed)
     session = get_session()
-    atari_learn(env, session, num_timesteps=task.max_timesteps)
+    log_dir = os.path.join('./logs', env.spec.id, datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S"))
+    if not os.path.exists(log_dir):
+        os.makedirs(log_dir)
+    atari_learn(env, session, num_timesteps=task.max_timesteps, log_dir=log_dir)
 
 if __name__ == "__main__":
     main()
