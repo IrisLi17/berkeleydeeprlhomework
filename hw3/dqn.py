@@ -7,6 +7,7 @@ import numpy as np
 import random
 import math
 import tensorflow                as tf
+from tensorflow.python.client import timeline
 import tensorflow.contrib.layers as layers
 from collections import namedtuple
 from dqn_utils import *
@@ -152,7 +153,7 @@ def learn(env,
     else:
         tau = 0.1
         # v_tp1 = (1.0 - done_mask_ph) * tf.log(tf.reduce_sum(tf.exp(q_tp1 / tau), axis=1))
-        v_tp1 = (1.0 - done_mask_ph) * tf.reduce_logsumexp(q_tp1/ tau, axis=1)
+        v_tp1 = (1.0 - done_mask_ph) * tf.reduce_logsumexp(q_tp1 / tau, axis=1)
         y_t = rew_t_ph + gamma * v_tp1
 
     total_error = tf.losses.huber_loss(y_t, q_t_selected)
@@ -235,7 +236,14 @@ def learn(env,
             else:
                 # sample act accroding to "softmax" distribution
                 sy_distribution = tf.nn.softmax(q_t)
-                distribution = session.run(sy_distribution, {obs_t_ph: obs_input[None]})[0]  # should get array
+                run_options = tf.RunOptions(trace_level=tf.RunOptions.FULL_TRACE)
+                run_metadata = tf.RunMetadata()
+                distribution = session.run(sy_distribution, {obs_t_ph: obs_input[None]}, options=run_options,
+                                           run_metadata=run_metadata)[0]  # should get array
+                tl = timeline.Timeline(run_metadata.step_stats)
+                ctf = tl.generate_chrome_trace_format()
+                with open('timeline.json', 'w') as f:
+                    f.write(ctf)
                 # sum_distri = np.dot(distribution, np.transpose(np.tri(num_actions, num_actions)))
                 # rand_num = random.random()
                 act = np.random.choice(num_actions, p=distribution)
