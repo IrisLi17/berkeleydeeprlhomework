@@ -235,12 +235,13 @@ def learn(env,
                 # sample act accroding to "softmax" distribution
                 sy_distribution = tf.nn.softmax(q_t)
                 distribution = session.run(sy_distribution, {obs_t_ph: obs_input[None]})[0]  # should get array
-                sum_distri = np.dot(distribution, np.transpose(np.tri(num_actions, num_actions)))
-                rand_num = random.random()
-                for idx in range(len(sum_distri)):
-                    if rand_num < sum_distri[idx]:
-                        act = idx
-                        break
+                # sum_distri = np.dot(distribution, np.transpose(np.tri(num_actions, num_actions)))
+                # rand_num = random.random()
+                act = np.random.choice(num_actions, p=distribution)
+                # for idx in range(len(sum_distri)):
+                #     if rand_num < sum_distri[idx]:
+                #         act = idx
+                #         break
         else:
             act = math.floor(random.random() * num_actions)
         # print(type(act))
