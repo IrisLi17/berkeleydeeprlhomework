@@ -34,6 +34,7 @@ def atari_learn(env,
                 session,
                 num_timesteps,
                 log_dir,
+                double_q,
                 soft_q):
     # This is just a rough estimate
     num_iterations = float(num_timesteps) / 4.0
@@ -80,6 +81,7 @@ def atari_learn(env,
         target_update_freq=10000,
         grad_norm_clipping=10,
         log_dir=log_dir,
+        double_q=double_q,
         soft_q=soft_q
     )
     env.close()
@@ -142,7 +144,7 @@ def main():
     log_dir = os.path.join('./logs', env.spec.id, datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S"))
     if not os.path.exists(log_dir):
         os.makedirs(log_dir)
-    atari_learn(env, session, num_timesteps=task.max_timesteps, log_dir=log_dir, soft_q=True)
+    atari_learn(env, session, num_timesteps=task.max_timesteps, log_dir=log_dir, double_q=True, soft_q=True)
 
 if __name__ == "__main__":
     main()

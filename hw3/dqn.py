@@ -29,7 +29,7 @@ def learn(env,
           target_update_freq=10000,
           grad_norm_clipping=10,
           double_q=False,
-          soft_q = False,
+          soft_q=False,
           log_dir=None):
     """Run Deep Q-learning algorithm.
 
@@ -144,13 +144,14 @@ def learn(env,
 
     if not soft_q:
         if double_q:
-            pass
+            q_tp1_max = (1.0 - done_mask_ph) * tf.reduce_sum(q_tp1 * tf.one_hot(tf.argmax(q_t, axis=1), num_actions),
+                                                             axis=1)
         else:
             q_tp1_max = (1.0 - done_mask_ph) * tf.reduce_max(q_tp1, axis=1)
-            y_t = rew_t_ph + gamma * q_tp1_max
+        y_t = rew_t_ph + gamma * q_tp1_max
     else:
         tau = 0.1
-        v_tp1 = (1.0 - done_mask_ph)* tf.log(tf.reduce_sum(tf.exp(q_tp1/tau), axis=1))
+        v_tp1 = (1.0 - done_mask_ph) * tf.log(tf.reduce_sum(tf.exp(q_tp1 / tau), axis=1))
         y_t = rew_t_ph + gamma * v_tp1
 
     total_error = tf.losses.huber_loss(y_t, q_t_selected)
@@ -181,7 +182,7 @@ def learn(env,
     mean_episode_reward = -float('nan')
     best_mean_episode_reward = -float('inf')
     last_obs = env.reset()
-    LOG_EVERY_N_STEPS = 10000
+    LOG_EVERY_N_STEPS = 100
 
     for t in itertools.count():
         ### 1. Check stopping criterion
@@ -232,8 +233,8 @@ def learn(env,
                 act = deterministic_act if random.random() >= exploration.value(t) else random_act
             else:
                 # sample act accroding to "softmax" distribution
-                distribution = tf.nn.softmax(q_t)
-                distribution = session.run(distribution, {obs_t_ph: obs_input[None]})[0] # should get array
+                sy_distribution = tf.nn.softmax(q_t)
+                distribution = session.run(sy_distribution, {obs_t_ph: obs_input[None]})[0]  # should get array
                 sum_distri = np.dot(distribution, np.transpose(np.tri(num_actions, num_actions)))
                 rand_num = random.random()
                 for idx in range(len(sum_distri)):
@@ -308,6 +309,7 @@ def learn(env,
             session.run(train_fn,
                         {obs_t_ph: obs_t_batch, act_t_ph: act_batch, rew_t_ph: rew_batch, obs_tp1_ph: obs_tp1_batch,
                          done_mask_ph: done_mask, learning_rate: optimizer_spec.lr_schedule.value(t)})
+            # print('ok')
             if t % target_update_freq == 0:
                 session.run(update_target_fn)
                 # I don't know how to make use of num_param_updates
