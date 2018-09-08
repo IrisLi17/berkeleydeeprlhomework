@@ -236,14 +236,7 @@ def learn(env,
             else:
                 # sample act accroding to "softmax" distribution
                 sy_distribution = tf.nn.softmax(q_t)
-                run_options = tf.RunOptions(trace_level=tf.RunOptions.FULL_TRACE)
-                run_metadata = tf.RunMetadata()
-                distribution = session.run(sy_distribution, {obs_t_ph: obs_input[None]}, options=run_options,
-                                           run_metadata=run_metadata)[0]  # should get array
-                tl = timeline.Timeline(run_metadata.step_stats)
-                ctf = tl.generate_chrome_trace_format()
-                with open('timeline.json', 'w') as f:
-                    f.write(ctf)
+                distribution = session.run(sy_distribution, {obs_t_ph: obs_input[None]})[0]  # should get array
                 # sum_distri = np.dot(distribution, np.transpose(np.tri(num_actions, num_actions)))
                 # rand_num = random.random()
                 act = np.random.choice(num_actions, p=distribution)
@@ -316,10 +309,17 @@ def learn(env,
                 session.run(update_target_fn)
                 model_initialized = True
                 print("initialized model")
+            run_options = tf.RunOptions(trace_level=tf.RunOptions.FULL_TRACE)
+            run_metadata = tf.RunMetadata()
             session.run(train_fn,
                         {obs_t_ph: obs_t_batch, act_t_ph: act_batch, rew_t_ph: rew_batch, obs_tp1_ph: obs_tp1_batch,
-                         done_mask_ph: done_mask, learning_rate: optimizer_spec.lr_schedule.value(t)})
-            # print('ok')
+                         done_mask_ph: done_mask, learning_rate: optimizer_spec.lr_schedule.value(t)},
+                        options=run_options, run_metadata=run_metadata)
+            tl = timeline.Timeline(run_metadata.step_stats)
+            ctf = tl.generate_chrome_trace_format()
+            with open('timeline.json', 'w') as f:
+                f.write(ctf)
+                # print('ok')
             if t % target_update_freq == 0:
                 session.run(update_target_fn)
                 # I don't know how to make use of num_param_updates
