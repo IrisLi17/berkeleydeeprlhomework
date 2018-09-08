@@ -29,6 +29,7 @@ def learn(env,
           target_update_freq=10000,
           grad_norm_clipping=10,
           double_q=False,
+          soft_q = False,
           log_dir=None):
     """Run Deep Q-learning algorithm.
 
@@ -141,11 +142,15 @@ def learn(env,
 
     q_t_selected = tf.reduce_sum(q_t * tf.one_hot(act_t_ph, num_actions), axis=1)
 
-    if double_q:
-        pass
+    if not soft_q:
+        if double_q:
+            pass
+        else:
+            q_tp1_max = (1.0 - done_mask_ph) * tf.reduce_max(q_tp1, axis=1)
+            y_t = rew_t_ph + gamma * q_tp1_max
     else:
-        q_tp1_max = (1.0 - done_mask_ph) * tf.reduce_max(q_tp1, axis=1)
-    y_t = rew_t_ph + gamma * q_tp1_max
+        v_tp1 = tf.log(tf.reduce_sum(tf.exp(q_tp1), axis=1))
+        y_t = rew_t_ph + gamma * v_tp1
 
     total_error = tf.losses.huber_loss(y_t, q_t_selected)
 
@@ -218,11 +223,22 @@ def learn(env,
         _next_idx = replay_buffer.store_frame(last_obs)
         if model_initialized:
             obs_input = replay_buffer.encode_recent_observation()
-            # what if tf.argmax
-            deterministic_act = np.argmax(session.run(q_t, {obs_t_ph: obs_input[None]})[0])
-            # deterministic_act = session.run(tf.argmax(q_t)[0], {obs_t_ph: obs_input[None]})
-            random_act = math.floor(random.random() * num_actions)
-            act = deterministic_act if random.random() >= exploration.value(t) else random_act
+            if not soft_q:
+                # what if tf.argmax
+                deterministic_act = np.argmax(session.run(q_t, {obs_t_ph: obs_input[None]})[0])
+                # deterministic_act = session.run(tf.argmax(q_t)[0], {obs_t_ph: obs_input[None]})
+                random_act = math.floor(random.random() * num_actions)
+                act = deterministic_act if random.random() >= exploration.value(t) else random_act
+            else:
+                # sample act accroding to "softmax" distribution
+                distribution = tf.nn.softmax(q_t)
+                distribution = session.run(distribution, {obs_t_ph: obs_input[None]})[0] # should get array
+                sum_distri = np.dot(distribution, np.transpose(np.tri(num_actions, num_actions)))
+                rand_num = random.random()
+                for idx in range(len(sum_distri)):
+                    if rand_num < sum_distri[idx]:
+                        act = idx
+                        break
         else:
             act = math.floor(random.random() * num_actions)
         # print(type(act))

@@ -33,7 +33,8 @@ def atari_model(img_in, num_actions, scope, reuse=False):
 def atari_learn(env,
                 session,
                 num_timesteps,
-                log_dir):
+                log_dir,
+                soft_q):
     # This is just a rough estimate
     num_iterations = float(num_timesteps) / 4.0
 
@@ -78,7 +79,8 @@ def atari_learn(env,
         frame_history_len=4,
         target_update_freq=10000,
         grad_norm_clipping=10,
-        log_dir=log_dir
+        log_dir=log_dir,
+        soft_q=soft_q
     )
     env.close()
 
@@ -124,6 +126,8 @@ def get_env(task, seed):
     return env
 
 def main():
+    os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
+    os.environ["CUDA_VISIBLE_DEVICES"] = "4"
     # Get Atari games.
     benchmark = gym.benchmark_spec('Atari40M')
 
@@ -138,7 +142,7 @@ def main():
     log_dir = os.path.join('./logs', env.spec.id, datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S"))
     if not os.path.exists(log_dir):
         os.makedirs(log_dir)
-    atari_learn(env, session, num_timesteps=task.max_timesteps, log_dir=log_dir)
+    atari_learn(env, session, num_timesteps=task.max_timesteps, log_dir=log_dir, soft_q=True)
 
 if __name__ == "__main__":
     main()
