@@ -149,7 +149,8 @@ def learn(env,
             q_tp1_max = (1.0 - done_mask_ph) * tf.reduce_max(q_tp1, axis=1)
             y_t = rew_t_ph + gamma * q_tp1_max
     else:
-        v_tp1 = tf.log(tf.reduce_sum(tf.exp(q_tp1), axis=1))
+        tau = 0.1
+        v_tp1 = (1.0 - done_mask_ph)* tf.log(tf.reduce_sum(tf.exp(q_tp1/tau), axis=1))
         y_t = rew_t_ph + gamma * v_tp1
 
     total_error = tf.losses.huber_loss(y_t, q_t_selected)
