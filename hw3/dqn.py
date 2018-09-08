@@ -317,8 +317,9 @@ def learn(env,
                         options=run_options, run_metadata=run_metadata)
             tl = timeline.Timeline(run_metadata.step_stats)
             ctf = tl.generate_chrome_trace_format()
-            with open('timeline.json', 'w') as f:
-                f.write(ctf)
+            if t < 50100:
+                with open('timeline.json', 'a') as f:
+                    f.write(ctf)
                 # print('ok')
             if t % target_update_freq == 0:
                 session.run(update_target_fn)
