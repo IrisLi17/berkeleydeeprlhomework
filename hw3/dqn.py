@@ -32,7 +32,8 @@ def learn(env,
           double_q=False,
           soft_q=False,
           log_dir=None,
-          fake=False):
+          tau=0.1
+          ):
     """Run Deep Q-learning algorithm.
 
     You can specify your own convnet using q_func.
@@ -152,7 +153,6 @@ def learn(env,
             q_tp1_max = (1.0 - done_mask_ph) * tf.reduce_max(q_tp1, axis=1)
         y_t = rew_t_ph + gamma * q_tp1_max
     else:
-        tau = 0.1
         # v_tp1 = (1.0 - done_mask_ph) * tf.log(tf.reduce_sum(tf.exp(q_tp1 / tau), axis=1))
         v_tp1 = (1.0 - done_mask_ph) * tf.reduce_logsumexp(q_tp1 / tau, axis=1)
         y_t = rew_t_ph + gamma * v_tp1
@@ -235,21 +235,9 @@ def learn(env,
                 random_act = math.floor(random.random() * num_actions)
                 act = deterministic_act if random.random() >= exploration.value(t) else random_act
             else:
-                if not fake:
-                    # sample act accroding to "softmax" distribution
-                    # sy_distribution = tf.nn.softmax(q_t)
-                    # distribution = session.run(sy_distribution, {obs_t_ph: obs_input[None]})[0]  # should get array
-                    # act = np.random.choice(num_actions, p=distribution)
-                    _q_value = session.run(q_t, {obs_t_ph: obs_input[None]})[0]
-                    act = np.random.choice(num_actions, p=np.exp(_q_value) / np.sum(np.exp(_q_value)))
-                else:
-                    deterministic_act = np.argmax(session.run(q_t, {obs_t_ph: obs_input[None]})[0])
-                    random_act = math.floor(random.random() * num_actions)
-                    act = deterministic_act if random.random() >= exploration.value(t) else random_act
-                # for idx in range(len(sum_distri)):
-                #     if rand_num < sum_distri[idx]:
-                #         act = idx
-                #         break
+                # sample act accroding to "softmax" distribution
+                _q_value = session.run(q_t, {obs_t_ph: obs_input[None]})[0]
+                act = np.random.choice(num_actions, p=np.exp(_q_value / tau) / np.sum(np.exp(_q_value / tau)))
         else:
             act = math.floor(random.random() * num_actions)
         # print(type(act))
@@ -315,17 +303,17 @@ def learn(env,
                 session.run(update_target_fn)
                 model_initialized = True
                 print("initialized model")
-            run_options = tf.RunOptions(trace_level=tf.RunOptions.FULL_TRACE)
-            run_metadata = tf.RunMetadata()
+            # run_options = tf.RunOptions(trace_level=tf.RunOptions.FULL_TRACE)
+            # run_metadata = tf.RunMetadata()
             session.run(train_fn,
                         {obs_t_ph: obs_t_batch, act_t_ph: act_batch, rew_t_ph: rew_batch, obs_tp1_ph: obs_tp1_batch,
                          done_mask_ph: done_mask, learning_rate: optimizer_spec.lr_schedule.value(t)},
-                        options=run_options, run_metadata=run_metadata)
-            tl = timeline.Timeline(run_metadata.step_stats)
-            ctf = tl.generate_chrome_trace_format()
-            if t < 50100:
-                with open('timeline.json', 'a') as f:
-                    f.write(ctf)
+                        )
+            # tl = timeline.Timeline(run_metadata.step_stats)
+            # ctf = tl.generate_chrome_trace_format()
+            # if t < 50100:
+            #     with open('timeline.json', 'a') as f:
+            #         f.write(ctf)
                 # print('ok')
             if t % target_update_freq == 0:
                 session.run(update_target_fn)
