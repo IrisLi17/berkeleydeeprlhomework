@@ -10,7 +10,7 @@ import tensorflow                as tf
 from tensorflow.python.client import timeline
 import tensorflow.contrib.layers as layers
 from collections import namedtuple
-from dqn_utils import *
+from .dqn_utils import *
 
 OptimizerSpec = namedtuple("OptimizerSpec", ["constructor", "kwargs", "lr_schedule"])
 
@@ -31,7 +31,8 @@ def learn(env,
           grad_norm_clipping=10,
           double_q=False,
           soft_q=False,
-          log_dir=None):
+          log_dir=None,
+          fake=True):
     """Run Deep Q-learning algorithm.
 
     You can specify your own convnet using q_func.
@@ -234,12 +235,17 @@ def learn(env,
                 random_act = math.floor(random.random() * num_actions)
                 act = deterministic_act if random.random() >= exploration.value(t) else random_act
             else:
-                # sample act accroding to "softmax" distribution
-                sy_distribution = tf.nn.softmax(q_t)
-                distribution = session.run(sy_distribution, {obs_t_ph: obs_input[None]})[0]  # should get array
-                # sum_distri = np.dot(distribution, np.transpose(np.tri(num_actions, num_actions)))
-                # rand_num = random.random()
-                act = np.random.choice(num_actions, p=distribution)
+                if not fake:
+                    # sample act accroding to "softmax" distribution
+                    sy_distribution = tf.nn.softmax(q_t)
+                    distribution = session.run(sy_distribution, {obs_t_ph: obs_input[None]})[0]  # should get array
+                    # sum_distri = np.dot(distribution, np.transpose(np.tri(num_actions, num_actions)))
+                    # rand_num = random.random()
+                    act = np.random.choice(num_actions, p=distribution)
+                else:
+                    deterministic_act = np.argmax(session.run(q_t, {obs_t_ph: obs_input[None]})[0])
+                    random_act = math.floor(random.random() * num_actions)
+                    act = deterministic_act if random.random() >= exploration.value(t) else random_act
                 # for idx in range(len(sum_distri)):
                 #     if rand_num < sum_distri[idx]:
                 #         act = idx
