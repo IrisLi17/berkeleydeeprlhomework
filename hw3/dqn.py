@@ -10,7 +10,7 @@ import tensorflow                as tf
 from tensorflow.python.client import timeline
 import tensorflow.contrib.layers as layers
 from collections import namedtuple
-from .dqn_utils import *
+from dqn_utils import *
 
 OptimizerSpec = namedtuple("OptimizerSpec", ["constructor", "kwargs", "lr_schedule"])
 
@@ -32,7 +32,7 @@ def learn(env,
           double_q=False,
           soft_q=False,
           log_dir=None,
-          fake=True):
+          fake=False):
     """Run Deep Q-learning algorithm.
 
     You can specify your own convnet using q_func.
@@ -237,11 +237,11 @@ def learn(env,
             else:
                 if not fake:
                     # sample act accroding to "softmax" distribution
-                    sy_distribution = tf.nn.softmax(q_t)
-                    distribution = session.run(sy_distribution, {obs_t_ph: obs_input[None]})[0]  # should get array
-                    # sum_distri = np.dot(distribution, np.transpose(np.tri(num_actions, num_actions)))
-                    # rand_num = random.random()
-                    act = np.random.choice(num_actions, p=distribution)
+                    # sy_distribution = tf.nn.softmax(q_t)
+                    # distribution = session.run(sy_distribution, {obs_t_ph: obs_input[None]})[0]  # should get array
+                    # act = np.random.choice(num_actions, p=distribution)
+                    _q_value = session.run(q_t, {obs_t_ph: obs_input[None]})[0]
+                    act = np.random.choice(num_actions, p=np.exp(_q_value) / np.sum(np.exp(_q_value)))
                 else:
                     deterministic_act = np.argmax(session.run(q_t, {obs_t_ph: obs_input[None]})[0])
                     random_act = math.floor(random.random() * num_actions)
