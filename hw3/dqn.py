@@ -154,7 +154,7 @@ def learn(env,
         y_t = rew_t_ph + gamma * q_tp1_max
     else:
         # v_tp1 = (1.0 - done_mask_ph) * tf.log(tf.reduce_sum(tf.exp(q_tp1 / tau), axis=1))
-        v_tp1 = (1.0 - done_mask_ph) * tf.reduce_logsumexp(q_tp1 / tau, axis=1)
+        v_tp1 = (1.0 - done_mask_ph) * tau * tf.reduce_logsumexp(q_tp1 / tau, axis=1)
         y_t = rew_t_ph + gamma * v_tp1
 
     total_error = tf.losses.huber_loss(y_t, q_t_selected)
@@ -185,7 +185,7 @@ def learn(env,
     mean_episode_reward = -float('nan')
     best_mean_episode_reward = -float('inf')
     last_obs = env.reset()
-    LOG_EVERY_N_STEPS = 100
+    LOG_EVERY_N_STEPS = 1000
 
     for t in itertools.count():
         ### 1. Check stopping criterion
@@ -237,7 +237,9 @@ def learn(env,
             else:
                 # sample act accroding to "softmax" distribution
                 _q_value = session.run(q_t, {obs_t_ph: obs_input[None]})[0]
-                act = np.random.choice(num_actions, p=np.exp(_q_value / tau) / np.sum(np.exp(_q_value / tau)))
+                # subtract max to improve numerical stability
+                act = np.random.choice(num_actions, p=np.exp((_q_value - np.max(_q_value)) / tau) / np.sum(
+                    np.exp((_q_value - np.max(_q_value)) / tau)))
         else:
             act = math.floor(random.random() * num_actions)
         # print(type(act))
@@ -314,7 +316,7 @@ def learn(env,
             # if t < 50100:
             #     with open('timeline.json', 'a') as f:
             #         f.write(ctf)
-                # print('ok')
+            # print('ok')
             if t % target_update_freq == 0:
                 session.run(update_target_fn)
                 # I don't know how to make use of num_param_updates
