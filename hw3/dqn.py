@@ -16,12 +16,14 @@ OptimizerSpec = namedtuple("OptimizerSpec", ["constructor", "kwargs", "lr_schedu
 
 
 def learn(env,
+          g,
           q_func,
           optimizer_spec,
           session,
           exploration=LinearSchedule(1000000, 0.1),
           stopping_criterion=None,
           replay_buffer_size=1000000,
+          expert_buffer_size=1000000,
           batch_size=32,
           gamma=0.99,
           learning_starts=50000,
@@ -31,6 +33,7 @@ def learn(env,
           grad_norm_clipping=10,
           double_q=False,
           soft_q=False,
+          use_expert=False,
           log_dir=None,
           tau=0.1
           ):
@@ -119,6 +122,15 @@ def learn(env,
     obs_t_float = tf.cast(obs_t_ph, tf.float32) / 255.0
     obs_tp1_float = tf.cast(obs_tp1_ph, tf.float32) / 255.0
 
+    # placeholders for expert demonstration
+    if use_expert:
+        obs_t_expert_ph = tf.placeholder(tf.uint8, [None] + list(input_shape))
+        act_t_expert_ph = tf.placeholder(tf.int32, [None])
+        obs_tp1_expert_ph = tf.placeholder(tf.uint8, [None] + list(input_shape))
+        done_mask_expert_ph = tf.placeholder(tf.float32, [None])
+        obs_t_expert_float = tf.cast(obs_t_expert_ph, tf.float32) / 255.0
+        obs_tp1_expert_float = tf.cast(obs_tp1_expert_ph, tf.float32) / 255.0
+
     # Here, you should fill in your own code to compute the Bellman error. This requires
     # evaluating the current and next Q-values and constructing the corresponding error.
     # TensorFlow will differentiate this error for you, you just need to pass it to the
@@ -140,6 +152,9 @@ def learn(env,
     # YOUR CODE HERE
     q_t = q_func(obs_t_float, num_actions, scope="q_func", reuse=False)
     q_tp1 = q_func(obs_tp1_float, num_actions, scope="target_func", reuse=False)
+    if use_expert:
+        q_t_expert = q_func(obs_t_expert_float, num_actions, scope="q_func", reuse=True)
+        q_tp1_expert = q_func(obs_tp1_expert_float, num_actions, scope="target_func", reuse=True)
     q_func_vars = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope="q_func")
     target_q_func_vars = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope="target_func")
 
@@ -156,8 +171,13 @@ def learn(env,
         # v_tp1 = (1.0 - done_mask_ph) * tf.log(tf.reduce_sum(tf.exp(q_tp1 / tau), axis=1))
         v_tp1 = (1.0 - done_mask_ph) * tau * tf.reduce_logsumexp(q_tp1 / tau, axis=1)
         y_t = rew_t_ph + gamma * v_tp1
+    if use_expert:
+        q_expert = q_t_expert
+        v_expert = tau * tf.reduce_logsumexp(q_tp1_expert / tau, axis=1)
+        adv_expert_sy = tf.nn.relu(q_expert - v_expert)
 
-    total_error = tf.losses.huber_loss(y_t, q_t_selected)
+    total_error = adv_expert_sy + tf.losses.huber_loss(y_t, q_t_selected) if use_expert else tf.losses.huber_loss(y_t,
+                                                                                                                  q_t_selected)
 
     ######
 
@@ -176,6 +196,10 @@ def learn(env,
 
     # construct the replay buffer
     replay_buffer = ReplayBuffer(replay_buffer_size, frame_history_len)
+    if use_expert:
+        datasetdir = '/home/liyunfei/atari_v2_release'
+        expert_buffer = ReplayBuffer(expert_buffer_size, frame_history_len)
+        expert_buffer.load_expert(datasetdir, g)
 
     ###############
     # RUN ENV     #
@@ -299,6 +323,9 @@ def learn(env,
 
             # YOUR CODE HERE
             obs_t_batch, act_batch, rew_batch, obs_tp1_batch, done_mask = replay_buffer.sample(batch_size)
+            if use_expert:
+                obs_t_expert_batch, act_t_expert_batch, obs_tp1_expert_batch, done_mask_expert = expert_buffer.sample(
+                    batch_size)
             if not model_initialized:
                 initialize_interdependent_variables(session, tf.global_variables(),
                                                     {obs_t_ph: obs_t_batch, obs_tp1_ph: obs_tp1_batch})
@@ -307,10 +334,19 @@ def learn(env,
                 print("initialized model")
             # run_options = tf.RunOptions(trace_level=tf.RunOptions.FULL_TRACE)
             # run_metadata = tf.RunMetadata()
-            session.run(train_fn,
-                        {obs_t_ph: obs_t_batch, act_t_ph: act_batch, rew_t_ph: rew_batch, obs_tp1_ph: obs_tp1_batch,
-                         done_mask_ph: done_mask, learning_rate: optimizer_spec.lr_schedule.value(t)},
-                        )
+            if not use_expert:
+                session.run(train_fn,
+                            {obs_t_ph: obs_t_batch, act_t_ph: act_batch, rew_t_ph: rew_batch, obs_tp1_ph: obs_tp1_batch,
+                             done_mask_ph: done_mask, learning_rate: optimizer_spec.lr_schedule.value(t)},
+                            )
+            else:
+                adv_expert = session.run(adv_expert_sy,
+                                         {obs_t_expert_ph: obs_t_expert_batch, act_t_expert_ph: act_t_expert_batch})
+                session.run(train_fn,
+                            {adv_expert_sy: adv_expert, obs_t_ph: obs_t_batch, act_t_ph: act_batch, rew_t_ph: rew_batch,
+                             obs_tp1_batch: obs_tp1_batch, done_mask_ph: done_mask,
+                             learning_rate: optimizer_spec.lr_schedule.value(t)})
+
             # tl = timeline.Timeline(run_metadata.step_stats)
             # ctf = tl.generate_chrome_trace_format()
             # if t < 50100:

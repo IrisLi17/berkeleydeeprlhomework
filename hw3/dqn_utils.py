@@ -4,6 +4,11 @@ import gym
 import tensorflow as tf
 import numpy as np
 import random
+from dataset import *
+from util import *
+import os
+import math
+import cv2
 
 def huber_loss(x, delta=1.0):
     # https://en.wikipedia.org/wiki/Huber_loss
@@ -298,6 +303,40 @@ class ReplayBuffer(object):
             # this optimization has potential to saves about 30% compute time \o/
             img_h, img_w = self.obs.shape[1], self.obs.shape[2]
             return self.obs[start_idx:end_idx].transpose(1, 2, 0, 3).reshape(img_h, img_w, -1)
+
+    def load_expert(self, datasetdir, g):
+        dataset = AtariDataset(datasetdir)
+        stats = dataset.stats
+        trajectories = dataset.trajectories
+        selected_traj = []
+        top50_score = stats[g]['top50_score']
+        screendir = os.path.join(datasetdir, 'screens', g)
+
+        for t in trajectories[g].keys():
+            if trajectories[g][t][-1]['score'] > top50_score:
+                selected_traj.append(t)
+                for timestep in range(math.floor(len(t)/4) - 1):
+                    if timestep == 0:
+                        obs_t = self.getFrameStack(screendir, t, 0, self.frame_history_len)
+                    act = t[4*timestep]['action']
+                    rew = t[4*timestep]['reward']
+                    done = t[4*timestep]['terminal']
+                    _next = self.store_frame(obs_t)
+                    obs_t = self.getFrameStack(screendir, t, 4 * (timestep + 1), self.frame_history_len)
+                    self.store_effect(_next, act, rew, done)
+
+    def getFrameStack(self, screendir, traj, start, stack):
+        obs = np.zeros((84, 84, stack))
+        obs_path = os.path.join(os.path.join(screendir, str(traj)))
+        for frame in range(stack):
+            state_p = os.path.join(obs_path, str(start + frame) + ".png")
+            if os.path.exists(state_p):
+                state = cv2.imread(os.path.join(obs_path, str(start + frame) + ".png"))
+                obs[:, :, frame] = preprocess(state)
+            else:
+                if not os.path.exists(state_p):
+                    print(state_p + " doesn't exist")
+        return obs
 
     def store_frame(self, frame):
         """Store a single frame in the buffer at the next available index, overwriting

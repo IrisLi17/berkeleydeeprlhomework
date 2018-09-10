@@ -31,11 +31,13 @@ def atari_model(img_in, num_actions, scope, reuse=False):
         return out
 
 def atari_learn(env,
+                g,
                 session,
                 num_timesteps,
                 log_dir,
                 double_q,
-                soft_q):
+                soft_q,
+                use_expert):
     # This is just a rough estimate
     num_iterations = float(num_timesteps) / 4.0
 
@@ -67,6 +69,7 @@ def atari_learn(env,
 
     dqn.learn(
         env,
+        g,
         q_func=atari_model,
         optimizer_spec=optimizer,
         session=session,
@@ -82,7 +85,8 @@ def atari_learn(env,
         grad_norm_clipping=10,
         log_dir=log_dir,
         double_q=double_q,
-        soft_q=soft_q
+        soft_q=soft_q,
+        use_expert=use_expert
     )
     env.close()
 
@@ -128,14 +132,19 @@ def get_env(task, seed):
     return env
 
 def main():
-    os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
-    os.environ["CUDA_VISIBLE_DEVICES"] = "4"
+    # os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
+    # os.environ["CUDA_VISIBLE_DEVICES"] = "4"
     # Get Atari games.
     benchmark = gym.benchmark_spec('Atari40M')
 
     # Change the index to select a different game.
-    task = benchmark.tasks[3]
-    # task = 'PongNoFrameskip-v0'
+    task = benchmark.tasks[6]
+    id2game = {
+        'QbertNoFrameskip-v4': 'qbert',
+        'SpaceInvadersNoFrameskip-v4':'spaceinvaders'
+    }
+    g = id2game[task.env_id]
+    # task = 'SpaceInvadersNoFrameskip-v4'
 
     # Run training
     seed = 0 # Use a seed of zero (you may want to randomize the seed!)
@@ -144,7 +153,7 @@ def main():
     log_dir = os.path.join('./logs', env.spec.id, datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S"))
     if not os.path.exists(log_dir):
         os.makedirs(log_dir)
-    atari_learn(env, session, num_timesteps=task.max_timesteps, log_dir=log_dir, double_q=True, soft_q=True)
+    atari_learn(env, g, session, num_timesteps=task.max_timesteps, log_dir=log_dir, double_q=True, soft_q=True, use_expert=False)
 
 if __name__ == "__main__":
     main()
